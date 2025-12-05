@@ -38,6 +38,8 @@ function vcf_settings_init()
     register_setting('vcf_plugin_options', 'vcf_email_consulta_compra');
     register_setting('vcf_plugin_options', 'vcf_email_reclamo');
     register_setting('vcf_plugin_options', 'vcf_email_informacion_noticiosa');
+    register_setting('vcf_plugin_options', 'vcf_recaptcha_site_key');
+    register_setting('vcf_plugin_options', 'vcf_recaptcha_secret_key');
 
     add_settings_section(
         'vcf_plugin_section',
@@ -78,6 +80,31 @@ function vcf_settings_init()
             array('option_name' => $id)
         );
     }
+
+    add_settings_section(
+        'vcf_recaptcha_section',
+        __('reCAPTCHA v3 Settings', 'villegas-contact-form'),
+        'vcf_recaptcha_section_callback',
+        'villegas-contact-form'
+    );
+
+    add_settings_field(
+        'vcf_recaptcha_site_key',
+        __('Site Key', 'villegas-contact-form'),
+        'vcf_text_field_render',
+        'villegas-contact-form',
+        'vcf_recaptcha_section',
+        array('option_name' => 'vcf_recaptcha_site_key')
+    );
+
+    add_settings_field(
+        'vcf_recaptcha_secret_key',
+        __('Secret Key', 'villegas-contact-form'),
+        'vcf_text_field_render',
+        'villegas-contact-form',
+        'vcf_recaptcha_section',
+        array('option_name' => 'vcf_recaptcha_secret_key')
+    );
 }
 add_action('admin_init', 'vcf_settings_init');
 
@@ -95,6 +122,71 @@ function vcf_section_callback()
 function vcf_email_section_callback()
 {
     echo __('Configure the recipient emails for each contact reason. If left empty, the admin email will be used.', 'villegas-contact-form');
+}
+
+/**
+ * Helper function to get reCAPTCHA keys.
+ * Checks plugin settings first, then VillegasLMS, then falls back to Wordfence settings.
+ *
+ * @return array Array with 'site_key' and 'secret_key'.
+ */
+function vcf_get_recaptcha_keys()
+{
+    $keys = array(
+        'site_key' => get_option('vcf_recaptcha_site_key'),
+        'secret_key' => get_option('vcf_recaptcha_secret_key'),
+    );
+
+    // 1. Check VillegasLMS
+    if (empty($keys['site_key']) || empty($keys['secret_key'])) {
+        $vcp_site_key = get_option('vcp_recaptcha_site_key');
+        $vcp_secret = get_option('vcp_recaptcha_secret_key');
+
+        if (!empty($vcp_site_key) && empty($keys['site_key'])) {
+            $keys['site_key'] = $vcp_site_key;
+        }
+        if (!empty($vcp_secret) && empty($keys['secret_key'])) {
+            $keys['secret_key'] = $vcp_secret;
+        }
+    }
+
+    // 2. If still empty, try to get from Wordfence
+    if (empty($keys['site_key']) || empty($keys['secret_key'])) {
+        global $wpdb;
+        // Wordfence stores settings in a custom table, usually wp_wfls_settings
+        // We need to find the table name dynamically if possible, or assume default prefix
+        $table_name = $wpdb->base_prefix . 'wfls_settings';
+
+        // Check if table exists to avoid errors
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") === $table_name) {
+            $wf_site_key = $wpdb->get_var("SELECT value FROM $table_name WHERE name = 'recaptcha-site-key'");
+            $wf_secret = $wpdb->get_var("SELECT value FROM $table_name WHERE name = 'recaptcha-secret'");
+
+            if (!empty($wf_site_key) && empty($keys['site_key'])) {
+                $keys['site_key'] = $wf_site_key;
+            }
+            if (!empty($wf_secret) && empty($keys['secret_key'])) {
+                $keys['secret_key'] = $wf_secret;
+            }
+        }
+    }
+
+    return $keys;
+}
+
+/**
+ * reCAPTCHA Section callback.
+ */
+function vcf_recaptcha_section_callback()
+{
+    echo '<p>Enter your Google reCAPTCHA v3 keys here to enable spam protection.</p>';
+
+    $keys = vcf_get_recaptcha_keys();
+    $plugin_site_key = get_option('vcf_recaptcha_site_key');
+
+    if (empty($plugin_site_key) && !empty($keys['site_key'])) {
+        echo '<div class="notice notice-info inline"><p><strong>Note:</strong> We detected reCAPTCHA keys from another plugin (VillegasLMS or Wordfence). You can leave these fields empty to use those keys.</p></div>';
+    }
 }
 
 /**
@@ -130,6 +222,19 @@ function vcf_email_field_render($args)
 }
 
 /**
+ * Render Text fields.
+ */
+function vcf_text_field_render($args)
+{
+    $option_name = $args['option_name'];
+    $options = get_option($option_name);
+    ?>
+    <input type='text' name='<?php echo esc_attr($option_name); ?>' value='<?php echo esc_attr($options); ?>'
+        class='regular-text'>
+    <?php
+}
+
+/**
  * Register the shortcode.
  */
 function vcf_contact_form_shortcode()
@@ -139,12 +244,18 @@ function vcf_contact_form_shortcode()
     wp_enqueue_style('vcf-style', plugin_dir_url(__FILE__) . 'assets/css/style.css', array(), '1.0.0');
     wp_enqueue_script('vcf-script', plugin_dir_url(__FILE__) . 'assets/js/script.js', array(), '1.0.0', true);
 
+    $recaptcha_site_key = get_option('vcf_recaptcha_site_key');
+    if (!empty($recaptcha_site_key)) {
+        wp_enqueue_script('google-recaptcha', 'https://www.google.com/recaptcha/api.js?render=' . esc_attr($recaptcha_site_key), array(), null, true);
+    }
+
     wp_localize_script(
         'vcf-script',
         'vcf_ajax_obj',
         array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('vcf_contact_form_nonce'),
+            'recaptcha_site_key' => $recaptcha_site_key,
         )
     );
 
@@ -158,6 +269,12 @@ function vcf_contact_form_shortcode()
                 brevedad.</p>
 
             <form id="vcf-contactForm">
+                <!-- Honeypot Field -->
+                <div style="display:none !important; visibility:hidden; opacity:0; height:0; width:0; overflow:hidden;">
+                    <label for="vcf_honeypot">Leave this field empty</label>
+                    <input type="text" id="vcf_honeypot" name="vcf_honeypot" tabindex="-1" autocomplete="off">
+                </div>
+
                 <!-- Grid para Nombre, Email y Teléfono (3 columnas en escritorio) -->
                 <div class="vcf-form-grid">
                     <!-- Nombre -->
@@ -177,56 +294,90 @@ function vcf_contact_form_shortcode()
                         <label for="phone" class="font-lexend">Teléfono</label>
                         <input type="tel" id="phone" name="phone" class="font-lexend vcf-input-field"
                             placeholder="(Opcional)">
-                    </div>
-                </div>
+                        function vcf_contact_form_shortcode() {
+                        // Enqueue Google Fonts
+                        wp_enqueue_style( 'google-fonts-fraunces',
+                        'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&display=swap',
+                        array(), null );
+                        wp_enqueue_style( 'google-fonts-lexend',
+                        'https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap', array(), null );
 
-                <!-- Motivo de Contacto (Dropdown) -->
-                <div style="margin-bottom: 24px;">
-                    <label for="reason" class="font-lexend">Motivo de Contacto</label>
-                    <select id="reason" name="reason" required class="font-lexend vcf-input-field">
-                        <option value="" disabled selected>Seleccione un motivo</option>
-                        <option value="publicidad_programa">Publicidad Programa</option>
-                        <option value="consulta_compra">Consulta sobre compra</option>
-                        <option value="reclamo">Reclamo</option>
-                        <option value="informacion_noticiosa">Información Noticiosa</option>
-                    </select>
-                </div>
+                        // Enqueue CSS
+                        wp_enqueue_style( 'vcf-style', plugin_dir_url( __FILE__ ) . 'assets/css/style.css' );
 
-                <!-- Mensaje -->
-                <div style="margin-bottom: 40px;">
-                    <label for="message" class="font-lexend">Mensaje</label>
-                    <textarea id="message" name="message" rows="5" required class="font-lexend vcf-input-field"></textarea>
-                </div>
+                        // Enqueue JS
+                        wp_enqueue_script( 'vcf-script', plugin_dir_url( __FILE__ ) . 'assets/js/script.js', array(), null,
+                        true );
 
-                <!-- Botón de Envío -->
-                <div>
-                    <button type="submit" id="vcf-submitButton" class="font-lexend">
-                        Enviar Mensaje
-                    </button>
-                </div>
-            </form>
+                        // Get reCAPTCHA keys
+                        $recaptcha_keys = vcf_get_recaptcha_keys();
+                        $recaptcha_site_key = $recaptcha_keys['site_key'];
 
-            <!-- Mensaje de éxito/Feedback -->
-            <div id="vcf-feedbackMessage" style="display: none;" class="font-lexend">
-                <div class="flex-container">
-                    <!-- Icono SVG de Checkmark (estilo B&N simple) -->
-                    <svg class="message-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <div>
-                        <p style="margin: 0; font-weight: 700;">¡Mensaje Enviado con Éxito!</p>
-                        <p style="margin: 0; font-size: 0.8rem; font-weight: 300;">Nos pondremos en contacto contigo pronto.
-                        </p>
-                    </div>
-                </div>
-            </div>
+                        if ( ! empty( $recaptcha_site_key ) ) {
+                        wp_enqueue_script( 'google-recaptcha', 'https://www.google.com/recaptcha/api.js?render=' . esc_attr(
+                        $recaptcha_site_key ), array(), null, true );
+                        }
 
-        </div>
-    </div>
-    <?php
-    return ob_get_clean();
+                        wp_localize_script(
+                        'vcf-script',
+                        'vcf_ajax_obj',
+                        array(
+                        'ajax_url' => admin_url( 'admin-ajax.php' ),
+                        'nonce' => wp_create_nonce( 'vcf_contact_form_nonce' ),
+                        'recaptcha_site_key' => $recaptcha_site_key,
+                        )
+                        );
+
+                        ob_start();
+                        ?>
+                        <div class="vcf-shortcode-wrapper">
+                            <div id="vcf-feedbackMessage" style="display:none;"></div>
+                            <form id="vcf-contactForm">
+                                <!-- Honeypot Field -->
+                                <div
+                                    style="display:none !important; visibility:hidden; opacity:0; height:0; width:0; overflow:hidden;">
+                                    <label for="vcf_honeypot">Leave this field empty</label>
+                                    <input type="text" id="vcf_honeypot" name="vcf_honeypot" tabindex="-1"
+                                        autocomplete="off">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="name">Nombre</label>
+                                    <input type="text" id="name" name="name" required placeholder="Tu nombre">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="email">Email</label>
+                                    <input type="email" id="email" name="email" required placeholder="tu@email.com">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="phone">Teléfono</label>
+                                    <input type="tel" id="phone" name="phone" placeholder="+56 9 1234 5678">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="reason">Motivo de Contacto</label>
+                                    <select id="reason" name="reason" required>
+                                        <option value="" disabled selected>Selecciona un motivo</option>
+                                        <option value="Publicidad Programa">Publicidad Programa</option>
+                                        <option value="Consulta sobre compra">Consulta sobre compra</option>
+                                        <option value="Reclamo">Reclamo</option>
+                                        <option value="Información Noticiosa">Información Noticiosa</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="message">Mensaje</label>
+                                    <textarea id="message" name="message" rows="5" required
+                                        placeholder="Escribe tu mensaje aquí..."></textarea>
+                                </div>
+
+                                <button type="submit" id="vcf-submitButton">Enviar Mensaje</button>
+                            </form>
+                        </div>
+                        <?php
+                        return ob_get_clean();
 }
 add_shortcode('villegas-contact-form', 'vcf_contact_form_shortcode');
 
@@ -237,6 +388,46 @@ function vcf_send_email()
 {
     check_ajax_referer('vcf_contact_form_nonce', 'nonce');
 
+    // 1. Honeypot Check
+    if (!empty($_POST['vcf_honeypot'])) {
+        // It's a bot. Return success to fool them, but don't send email.
+        wp_send_json_success(array('message' => 'Sent'));
+        exit;
+    }
+
+    // 2. reCAPTCHA Check
+    $recaptcha_keys = vcf_get_recaptcha_keys();
+    $recaptcha_secret = $recaptcha_keys['secret_key'];
+
+    if (!empty($recaptcha_secret) && !empty($_POST['recaptcha_token'])) {
+        $token = sanitize_text_field($_POST['recaptcha_token']);
+        $response = wp_remote_post(
+            'https://www.google.com/recaptcha/api/siteverify',
+            array(
+                'body' => array(
+                    'secret' => $recaptcha_secret,
+                    'response' => $token,
+                    'remoteip' => $_SERVER['REMOTE_ADDR'],
+                ),
+            )
+        );
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => 'Error verifying reCAPTCHA'));
+            exit;
+        }
+
+        $response_body = wp_remote_retrieve_body($response);
+        $result = json_decode($response_body, true);
+
+        if (!$result['success'] || $result['score'] < 0.5) {
+            // Likely a bot
+            wp_send_json_error(array('message' => 'Spam detected. Please try again.'));
+            exit;
+        }
+    }
+
+    // Sanitize fields
     $name = sanitize_text_field($_POST['name']);
     $email = sanitize_email($_POST['email']);
     $phone = sanitize_text_field($_POST['phone']);
@@ -244,12 +435,13 @@ function vcf_send_email()
     $message = sanitize_textarea_field($_POST['message']);
 
     // Determine recipient based on reason
-    $to = get_option('admin_email');
+    $to = get_option('admin_email'); // Fallback
+
     $reason_map = array(
-        'publicidad_programa' => 'vcf_email_publicidad_programa',
-        'consulta_compra' => 'vcf_email_consulta_compra',
-        'reclamo' => 'vcf_email_reclamo',
-        'informacion_noticiosa' => 'vcf_email_informacion_noticiosa',
+        'Publicidad Programa' => 'vcf_email_publicidad_programa',
+        'Consulta sobre compra' => 'vcf_email_consulta_compra',
+        'Reclamo' => 'vcf_email_reclamo',
+        'Información Noticiosa' => 'vcf_email_informacion_noticiosa',
     );
 
     if (isset($reason_map[$reason])) {
@@ -259,23 +451,26 @@ function vcf_send_email()
         }
     }
 
-    $subject = 'Nuevo mensaje de contacto: ' . $reason;
+    $subject = "Nuevo mensaje de contacto: $reason";
     $body = "Nombre: $name\n";
     $body .= "Email: $email\n";
     $body .= "Teléfono: $phone\n";
     $body .= "Motivo: $reason\n\n";
     $body .= "Mensaje:\n$message\n";
-    $headers = array('Content-Type: text/plain; charset=UTF-8', 'From: ' . $name . ' <' . $email . '>');
+
+    $headers = array('Content-Type: text/plain; charset=UTF-8', "Reply-To: $name <$email>");
 
     $sent = wp_mail($to, $subject, $body, $headers);
 
     if ($sent) {
         $thank_you_page_id = get_option('vcf_thank_you_page_id');
-        $redirect_url = $thank_you_page_id ? get_permalink($thank_you_page_id) : '';
-
+        $redirect_url = '';
+        if (!empty($thank_you_page_id)) {
+            $redirect_url = get_permalink($thank_you_page_id);
+        }
         wp_send_json_success(array('redirect_url' => $redirect_url));
     } else {
-        wp_send_json_error(array('message' => 'No se pudo enviar el correo.'));
+        wp_send_json_error(array('message' => 'Error al enviar el correo.'));
     }
 }
 add_action('wp_ajax_vcf_send_email', 'vcf_send_email');
@@ -290,15 +485,15 @@ function vcf_options_page_html()
         return;
     }
     ?>
-    <div class="wrap">
-        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-        <form action="options.php" method="post">
-            <?php
-            settings_fields('vcf_plugin_options');
-            do_settings_sections('villegas-contact-form');
-            submit_button();
-            ?>
-        </form>
-    </div>
-    <?php
+                        <div class="wrap">
+                            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+                            <form action="options.php" method="post">
+                                <?php
+                                settings_fields('vcf_plugin_options');
+                                do_settings_sections('villegas-contact-form');
+                                submit_button();
+                                ?>
+                            </form>
+                        </div>
+                        <?php
 }
