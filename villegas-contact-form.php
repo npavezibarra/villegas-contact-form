@@ -408,7 +408,15 @@ function vcf_send_email()
         }
     }
 
-    $subject = "Nuevo mensaje de contacto: $reason";
+    // Determine subject based on reason
+    $subject_map = array(
+        'Publicidad Programa' => 'CONSULTA PUBLICIDAD PROGRAMA',
+        'Consulta sobre compra' => 'CONSULTA COMPRA',
+        'Reclamo' => 'RECLAMO',
+        'Información Noticiosa' => 'INFORMACIÓN NOTICIOSA',
+    );
+
+    $subject = isset($subject_map[$reason]) ? $subject_map[$reason] : "Nuevo mensaje de contacto: $reason";
     $body = "Nombre: $name\n";
     $body .= "Email: $email\n";
     $body .= "Teléfono: $phone\n";
