@@ -288,21 +288,21 @@ function vcf_contact_form_shortcode()
                 <!-- Grid para Nombre, Email y Teléfono -->
                 <div class="vcf-form-grid">
                     <!-- Nombre -->
-                    <div>
+                    <div id="vcf-name-group">
                         <label for="name" class="font-lexend">Nombre</label>
                         <input type="text" id="name" name="name" required class="font-lexend vcf-input-field"
                             placeholder="Tu nombre">
                     </div>
 
                     <!-- Correo Electrónico -->
-                    <div>
+                    <div id="vcf-email-group">
                         <label for="email" class="font-lexend">Correo Electrónico</label>
                         <input type="email" id="email" name="email" required class="font-lexend vcf-input-field"
                             placeholder="tu@email.com">
                     </div>
 
                     <!-- Teléfono -->
-                    <div>
+                    <div id="vcf-phone-group">
                         <label for="phone" class="font-lexend">Teléfono</label>
                         <input type="tel" id="phone" name="phone" class="font-lexend vcf-input-field"
                             placeholder="+56 9 1234 5678">
@@ -310,7 +310,7 @@ function vcf_contact_form_shortcode()
                 </div>
 
                 <!-- Motivo de Contacto -->
-                <div class="form-group">
+                <div id="vcf-reason-group" class="form-group">
                     <label for="reason" class="font-lexend">Motivo de Contacto</label>
                     <select id="reason" name="reason" required class="font-lexend vcf-input-field">
                         <option value="" disabled selected>Selecciona un motivo</option>
@@ -322,7 +322,7 @@ function vcf_contact_form_shortcode()
                 </div>
 
                 <!-- Mensaje -->
-                <div class="form-group">
+                <div id="vcf-message-group" class="form-group">
                     <label for="message" class="font-lexend">Mensaje</label>
                     <textarea id="message" name="message" rows="5" required class="font-lexend vcf-input-field"
                         placeholder="Escribe tu mensaje aquí..."></textarea>

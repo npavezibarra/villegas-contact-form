@@ -89,6 +89,40 @@
     box-sizing: border-box;
     background-color: #ffffff;
     transition: border-color 0.15s, box-shadow 0.15s;
+    height: 48px;
+    line-height: 1.5;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+input.vcf-input-field,
+select.vcf-input-field {
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+}
+
+/* Ensure all input types render the same */
+input[type="text"].vcf-input-field,
+input[type="email"].vcf-input-field,
+input[type="tel"].vcf-input-field {
+    height: 48px;
+    padding: 12px;
+    line-height: 1.5;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-block: 12px;
+    padding-inline: 12px;
+    direction: ltr;
+    margin: 0;
+}
+
+/* Specific reset for phone field */
+input#phone {
+    margin: 0 !important;
 }
 
 .vcf-input-field:focus {
@@ -97,8 +131,28 @@
     box-shadow: 0 0 0 1px #000000;
 }
 
+/* Specific overrides to prevent external CSS interference */
+.vcf-input-field {
+    margin-bottom: 0 !important;
+}
+
 textarea.vcf-input-field {
     resize: vertical;
+    height: auto !important;
+    min-height: 120px;
+}
+
+/* Add spacing above message group */
+div#vcf-message-group {
+    margin-top: 20px;
+}
+
+/* Ensure form groups have no extra margins */
+div#vcf-name-group,
+div#vcf-email-group,
+div#vcf-phone-group,
+div#vcf-reason-group {
+    margin: 0;
 }
 
 /* Botón de envío (Column/Article Titles) */
