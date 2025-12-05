@@ -239,12 +239,20 @@ function vcf_text_field_render($args)
  */
 function vcf_contact_form_shortcode()
 {
-    // Enqueue styles and scripts
-    wp_enqueue_style('vcf-google-fonts', 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Lexend:wght@300;400;500&display=swap', array(), null);
-    wp_enqueue_style('vcf-style', plugin_dir_url(__FILE__) . 'assets/css/style.css', array(), '1.0.0');
-    wp_enqueue_script('vcf-script', plugin_dir_url(__FILE__) . 'assets/js/script.js', array(), '1.0.0', true);
+    // Enqueue Google Fonts
+    wp_enqueue_style('google-fonts-fraunces', 'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&display=swap', array(), null);
+    wp_enqueue_style('google-fonts-lexend', 'https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap', array(), null);
 
-    $recaptcha_site_key = get_option('vcf_recaptcha_site_key');
+    // Enqueue CSS
+    wp_enqueue_style('vcf-style', plugin_dir_url(__FILE__) . 'assets/css/style.css');
+
+    // Enqueue JS
+    wp_enqueue_script('vcf-script', plugin_dir_url(__FILE__) . 'assets/js/script.js', array(), null, true);
+
+    // Get reCAPTCHA keys
+    $recaptcha_keys = vcf_get_recaptcha_keys();
+    $recaptcha_site_key = $recaptcha_keys['site_key'];
+
     if (!empty($recaptcha_site_key)) {
         wp_enqueue_script('google-recaptcha', 'https://www.google.com/recaptcha/api.js?render=' . esc_attr($recaptcha_site_key), array(), null, true);
     }
@@ -268,6 +276,8 @@ function vcf_contact_form_shortcode()
             <p class="font-fraunces vcf-p-intro-style">Envíanos tu consulta. Nos pondremos en contacto contigo a la
                 brevedad.</p>
 
+            <div id="vcf-feedbackMessage" style="display:none;"></div>
+
             <form id="vcf-contactForm">
                 <!-- Honeypot Field -->
                 <div style="display:none !important; visibility:hidden; opacity:0; height:0; width:0; overflow:hidden;">
@@ -275,109 +285,56 @@ function vcf_contact_form_shortcode()
                     <input type="text" id="vcf_honeypot" name="vcf_honeypot" tabindex="-1" autocomplete="off">
                 </div>
 
-                <!-- Grid para Nombre, Email y Teléfono (3 columnas en escritorio) -->
+                <!-- Grid para Nombre, Email y Teléfono -->
                 <div class="vcf-form-grid">
                     <!-- Nombre -->
                     <div>
                         <label for="name" class="font-lexend">Nombre</label>
-                        <input type="text" id="name" name="name" required class="font-lexend vcf-input-field">
+                        <input type="text" id="name" name="name" required class="font-lexend vcf-input-field"
+                            placeholder="Tu nombre">
                     </div>
 
                     <!-- Correo Electrónico -->
                     <div>
                         <label for="email" class="font-lexend">Correo Electrónico</label>
-                        <input type="email" id="email" name="email" required class="font-lexend vcf-input-field">
+                        <input type="email" id="email" name="email" required class="font-lexend vcf-input-field"
+                            placeholder="tu@email.com">
                     </div>
 
                     <!-- Teléfono -->
                     <div>
                         <label for="phone" class="font-lexend">Teléfono</label>
                         <input type="tel" id="phone" name="phone" class="font-lexend vcf-input-field"
-                            placeholder="(Opcional)">
-                        function vcf_contact_form_shortcode() {
-                        // Enqueue Google Fonts
-                        wp_enqueue_style( 'google-fonts-fraunces',
-                        'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&display=swap',
-                        array(), null );
-                        wp_enqueue_style( 'google-fonts-lexend',
-                        'https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap', array(), null );
+                            placeholder="+56 9 1234 5678">
+                    </div>
+                </div>
 
-                        // Enqueue CSS
-                        wp_enqueue_style( 'vcf-style', plugin_dir_url( __FILE__ ) . 'assets/css/style.css' );
+                <!-- Motivo de Contacto -->
+                <div class="form-group">
+                    <label for="reason" class="font-lexend">Motivo de Contacto</label>
+                    <select id="reason" name="reason" required class="font-lexend vcf-input-field">
+                        <option value="" disabled selected>Selecciona un motivo</option>
+                        <option value="Publicidad Programa">Publicidad Programa</option>
+                        <option value="Consulta sobre compra">Consulta sobre compra</option>
+                        <option value="Reclamo">Reclamo</option>
+                        <option value="Información Noticiosa">Información Noticiosa</option>
+                    </select>
+                </div>
 
-                        // Enqueue JS
-                        wp_enqueue_script( 'vcf-script', plugin_dir_url( __FILE__ ) . 'assets/js/script.js', array(), null,
-                        true );
+                <!-- Mensaje -->
+                <div class="form-group">
+                    <label for="message" class="font-lexend">Mensaje</label>
+                    <textarea id="message" name="message" rows="5" required class="font-lexend vcf-input-field"
+                        placeholder="Escribe tu mensaje aquí..."></textarea>
+                </div>
 
-                        // Get reCAPTCHA keys
-                        $recaptcha_keys = vcf_get_recaptcha_keys();
-                        $recaptcha_site_key = $recaptcha_keys['site_key'];
-
-                        if ( ! empty( $recaptcha_site_key ) ) {
-                        wp_enqueue_script( 'google-recaptcha', 'https://www.google.com/recaptcha/api.js?render=' . esc_attr(
-                        $recaptcha_site_key ), array(), null, true );
-                        }
-
-                        wp_localize_script(
-                        'vcf-script',
-                        'vcf_ajax_obj',
-                        array(
-                        'ajax_url' => admin_url( 'admin-ajax.php' ),
-                        'nonce' => wp_create_nonce( 'vcf_contact_form_nonce' ),
-                        'recaptcha_site_key' => $recaptcha_site_key,
-                        )
-                        );
-
-                        ob_start();
-                        ?>
-                        <div class="vcf-shortcode-wrapper">
-                            <div id="vcf-feedbackMessage" style="display:none;"></div>
-                            <form id="vcf-contactForm">
-                                <!-- Honeypot Field -->
-                                <div
-                                    style="display:none !important; visibility:hidden; opacity:0; height:0; width:0; overflow:hidden;">
-                                    <label for="vcf_honeypot">Leave this field empty</label>
-                                    <input type="text" id="vcf_honeypot" name="vcf_honeypot" tabindex="-1"
-                                        autocomplete="off">
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="name">Nombre</label>
-                                    <input type="text" id="name" name="name" required placeholder="Tu nombre">
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="email">Email</label>
-                                    <input type="email" id="email" name="email" required placeholder="tu@email.com">
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="phone">Teléfono</label>
-                                    <input type="tel" id="phone" name="phone" placeholder="+56 9 1234 5678">
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="reason">Motivo de Contacto</label>
-                                    <select id="reason" name="reason" required>
-                                        <option value="" disabled selected>Selecciona un motivo</option>
-                                        <option value="Publicidad Programa">Publicidad Programa</option>
-                                        <option value="Consulta sobre compra">Consulta sobre compra</option>
-                                        <option value="Reclamo">Reclamo</option>
-                                        <option value="Información Noticiosa">Información Noticiosa</option>
-                                    </select>
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="message">Mensaje</label>
-                                    <textarea id="message" name="message" rows="5" required
-                                        placeholder="Escribe tu mensaje aquí..."></textarea>
-                                </div>
-
-                                <button type="submit" id="vcf-submitButton">Enviar Mensaje</button>
-                            </form>
-                        </div>
-                        <?php
-                        return ob_get_clean();
+                <!-- Botón -->
+                <button type="submit" id="vcf-submitButton" class="font-lexend">Enviar Mensaje</button>
+            </form>
+        </div>
+    </div>
+    <?php
+    return ob_get_clean();
 }
 add_shortcode('villegas-contact-form', 'vcf_contact_form_shortcode');
 
@@ -485,15 +442,15 @@ function vcf_options_page_html()
         return;
     }
     ?>
-                        <div class="wrap">
-                            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-                            <form action="options.php" method="post">
-                                <?php
-                                settings_fields('vcf_plugin_options');
-                                do_settings_sections('villegas-contact-form');
-                                submit_button();
-                                ?>
-                            </form>
-                        </div>
-                        <?php
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <form action="options.php" method="post">
+            <?php
+            settings_fields('vcf_plugin_options');
+            do_settings_sections('villegas-contact-form');
+            submit_button();
+            ?>
+        </form>
+    </div>
+    <?php
 }
